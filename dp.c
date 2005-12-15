@@ -1,12 +1,36 @@
 /* $Id$ */
 
+#include <sys/types.h>
+#include <sys/queue.h>
+#include <sys/event.h>
+#include <sys/time.h>
+
+#include <ctype.h>
+#include <err.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sysexits.h>
+#include <unistd.h>
+
+struct set {
+	int			s_from;
+	int			s_to;
+	SLIST_ENTRY(set)	s_next;
+};
+
+void				setfds(char *);
+void				usage(void);
+void				multiplex(int, int);
+
+SLIST_HEAD(, set)		setlh;
+
 int
 main(int argc, char *argv[])
 {
 	int ch;
 
-	while ((i = getopt(argc, argv, "")) != -1)
-		switch (i) {
+	while ((ch = getopt(argc, argv, "")) != -1)
+		switch (ch) {
 		default:
 			usage();
 			/* NOTREACHED */
@@ -20,14 +44,6 @@ main(int argc, char *argv[])
 	err(127, "%s", argv[1]);
 	/* NOTREACHED */
 }
-
-struct set {
-	int			s_from;
-	int			s_to;
-	SLIST_ENTRY(set)	s_next;
-};
-
-SLIST_HEAD(, setlh);
 
 void
 setfds(char *fdspec)
@@ -66,7 +82,7 @@ setfds(char *fdspec)
 			if (tofd == -1)
 				fdp = NULL;
 			else {
-				if (fdp = malloc(sizeof(*fdp)) == NULL)
+				if ((fdp = malloc(sizeof(*fdp))) == NULL)
 					err(EX_OSERR, "malloc");
 				*fdp = tofd;
 			}
@@ -77,7 +93,7 @@ setfds(char *fdspec)
 			kev.fflags = NOTE_EOF;
 			kev.data = 0;
 			kev.udata = fdp;
-			if (kevent(kq, kev, 1, NULL, 0, NULL) == -1)
+			if (kevent(kd, &kev, 1, NULL, 0, NULL) == -1)
 				err(EX_OSERR, "kevent");
 				
 			fromfd = tofd = -1;
@@ -102,24 +118,24 @@ setfds(char *fdspec)
 		}
 	}
 
-	if (!SLIST_EMPTY(&set)) {
+	if (!SLIST_EMPTY(&setlh)) {
 		switch (fork()) {
 		case -1:
 			err(EX_OSERR, "fork");
 			/* NOTREACHED */
 		case 0:
-			mutiplex(kq, nfds);
+			multiplex(kd, nfds);
 			/* NOTREACHED */
 		}
 	}
 }
 
 void
-multiplex(int kq, int nfds)
+multiplex(int kd, int nfds)
 {
 	struct kevent kev;
 
-	while (nfds > 0 && kevent(kq, NULL, 0, &kev, 1, NULL)) {
+	while (nfds > 0 && kevent(kd, NULL, 0, &kev, 1, NULL)) {
 		if (kev.flags & EV_EOF || kev.fflags & NOTE_EOF)
 			nfds--;
 	}
